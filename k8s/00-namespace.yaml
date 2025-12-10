@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: moneymind
+  labels:
+    name: moneymind
+    app: moneymind-finance-ai

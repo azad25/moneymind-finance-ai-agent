@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import StoreProvider from "./StoreProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "MoneyMind - Your Personal Finance AI",
-  description: "Your personal finance AI assistant",
+  description: "AI-powered personal finance assistant with natural language interface",
+  keywords: ["finance", "AI", "money", "budget", "expenses", "savings"],
 };
 
 export default function RootLayout({
@@ -20,14 +22,16 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <StoreProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {children}
-          </ThemeProvider>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="dark"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+            </ThemeProvider>
+          </AuthProvider>
         </StoreProvider>
       </body>
     </html>

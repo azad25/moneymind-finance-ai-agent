@@ -1,0 +1,1 @@
+"""MoneyMind Domain Package"""

@@ -1,0 +1,80 @@
+# MoneyMind Backend Dependencies
+# Core
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic[email]>=2.6.0
+pydantic-settings>=2.1.0
+python-multipart>=0.0.6
+
+# Database
+asyncpg>=0.29.0
+sqlalchemy[asyncio]>=2.0.25
+alembic>=1.13.1
+psycopg2-binary>=2.9.9
+redis>=5.0.1
+aioredis>=2.0.1
+
+# Vector Database
+qdrant-client>=1.7.0
+
+# Graph Database
+neo4j>=5.16.0
+
+# LangChain / LangGraph (let pip resolve versions)
+langchain>=0.1.5
+langchain-core>=0.1.21
+langgraph>=0.0.26
+langchain-community>=0.0.19
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+google-auth>=2.27.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.116.0
+
+# Stripe
+stripe>=7.12.0
+
+# Background Tasks
+celery>=5.3.6
+flower>=2.0.1
+
+# HTTP Client (let pip resolve compatible version)
+httpx>=0.25.0
+aiohttp>=3.9.3
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.3
+
+# Document Processing
+PyPDF2>=3.0.1
+pypdf>=3.17.4
+python-docx>=1.1.0
+python-pptx>=0.6.23
+openpyxl>=3.1.2
+
+# LLM
+ollama>=0.1.6
+huggingface-hub>=0.20.3
+transformers>=4.37.2
+sentence-transformers>=2.3.1
+
+# Utilities
+python-dotenv>=1.0.1
+tenacity>=8.2.3
+structlog>=24.1.0
+python-dateutil>=2.8.2
+
+# Development
+pytest>=7.4.4
+pytest-asyncio>=0.23.4
+pytest-cov>=4.1.0
+black>=24.1.1
+isort>=5.13.2
+mypy>=1.8.0
+
+# Security
+cryptography>=42.0.2
+email-validator>=2.0.0

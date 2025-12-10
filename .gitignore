@@ -1,0 +1,35 @@
+# Add to .gitignore
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+
+# Kubernetes secrets (if you create local copies)
+k8s/*-secrets-local.yaml
+
+# Logs
+*.log
+logs/
+
+# Database data
+postgres_data/
+redis_data/
+qdrant_data/
+neo4j_data/
+
+# Models
+backend/models/*
+!backend/models/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

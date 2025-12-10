@@ -1,0 +1,84 @@
+---
+# PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+# Redis PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+---
+# Qdrant PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+---
+# Neo4j Data PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-data-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+# Neo4j Logs PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-logs-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard
+---
+# Backend Models PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-models-pvc
+  namespace: moneymind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi
+  storageClassName: standard

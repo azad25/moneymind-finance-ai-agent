@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: moneymind
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: moneymind-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # From ConfigMap
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: APP_ENV
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: DEBUG
+        - name: QDRANT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: QDRANT_URL
+        - name: NEO4J_URI
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: NEO4J_URI
+        - name: NEO4J_USER
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: NEO4J_USER
+        - name: MODEL_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: MODEL_NAME
+        - name: MODEL_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: moneymind-config
+              key: MODEL_PATH
+        # From Secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: REDIS_URL
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: NEO4J_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: SECRET_KEY
+        - name: EXCHANGE_RATE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: EXCHANGE_RATE_API_KEY
+        - name: ALPHA_VANTAGE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: moneymind-secrets
+              key: ALPHA_VANTAGE_API_KEY
+        volumeMounts:
+        - name: models-storage
+          mountPath: /app/models
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: models-storage
+        persistentVolumeClaim:
+          claimName: backend-models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: moneymind
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: backend

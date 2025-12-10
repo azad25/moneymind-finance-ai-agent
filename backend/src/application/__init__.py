@@ -1,0 +1,1 @@
+"""MoneyMind Application Package"""
