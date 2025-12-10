@@ -1,7 +1,7 @@
-/**
- * Sandbox MCP Tool
- * LangChain tool for secure code execution via sandbox-mcp
- */
+"""
+Sandbox MCP Tool
+LangChain tool for secure code execution via sandbox-mcp
+"""
 from typing import Optional
 from langchain_core.tools import tool
 import httpx

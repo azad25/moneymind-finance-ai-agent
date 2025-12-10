@@ -1,16 +1,51 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockSubscriptions } from "@/lib/mock-data";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
-import { useState } from "react";
+import { subscriptionsApi } from "@/lib/api/client";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { setSubscriptions } from "@/lib/features/financeSlice";
+import { Subscription } from "@/lib/types";
 
 export default function SubscriptionsPage() {
-    const subscriptions = mockSubscriptions;
+    const dispatch = useAppDispatch();
+    const subscriptions = useAppSelector((state) => state.finance.subscriptions);
     const [date, setDate] = useState<Date | undefined>(new Date());
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchSubscriptions = async () => {
+            setLoading(true);
+            setError(null);
+            const response = await subscriptionsApi.list();
+            if (!isMounted) return;
+
+            if (response.data) {
+                const parsed = response.data.map((item: any) => ({
+                    id: item.id,
+                    name: item.name,
+                    amount: Number(item.amount),
+                    nextCharge: new Date(item.next_billing_date ?? item.created_at ?? Date.now()),
+                    logo: item.logo,
+                })) as Subscription[];
+                dispatch(setSubscriptions(parsed));
+            } else if (response.error) {
+                setError(response.error);
+            }
+            setLoading(false);
+        };
+
+        fetchSubscriptions();
+        return () => {
+            isMounted = false;
+        };
+    }, [dispatch]);
 
     const totalMonthly = subscriptions.reduce((acc, sub) => acc + sub.amount, 0);
 
@@ -20,8 +55,14 @@ export default function SubscriptionsPage() {
                 <div className="flex items-center justify-between">
                     <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
                     <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Total Monthly</p>
-                        <p className="text-2xl font-bold">${totalMonthly.toFixed(2)}</p>
+                        {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
+                        {error && <p className="text-sm text-destructive">Error: {error}</p>}
+                        {!loading && !error && (
+                            <>
+                                <p className="text-sm text-muted-foreground">Total Monthly</p>
+                                <p className="text-2xl font-bold">${totalMonthly.toFixed(2)}</p>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -31,6 +72,9 @@ export default function SubscriptionsPage() {
                             <CardTitle>Active Subscriptions</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            {subscriptions.length === 0 && !loading && (
+                                <p className="text-sm text-muted-foreground">No subscriptions found.</p>
+                            )}
                             {subscriptions.map((sub) => (
                                 <div key={sub.id} className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">

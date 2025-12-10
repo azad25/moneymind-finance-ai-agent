@@ -4,7 +4,7 @@ SQLAlchemy model for financial goals
 """
 from datetime import datetime, date
 from decimal import Decimal
-from sqlalchemy import Column, String, Numeric, Date, DateTime, ForeignKey
+from sqlalchemy import Column, String, Numeric, Date, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 
 from src.infrastructure.database.postgres import Base
@@ -45,7 +45,3 @@ class Goal(Base):
     
     def __repr__(self):
         return f"<Goal(id={self.id}, name={self.name}, progress={self.progress_percent:.1f}%)>"
-
-
-# Need to import Boolean
-from sqlalchemy import Boolean

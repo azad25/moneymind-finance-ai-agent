@@ -103,7 +103,7 @@ export function ChatInterface() {
     // Auto-scroll to bottom
     useEffect(() => {
         if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            scrollRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [messages, isTyping, streamingMessage]);
 
@@ -163,37 +163,24 @@ export function ChatInterface() {
         { label: "What's the price of AAPL?", icon: "📈" },
     ];
 
-    // Connection status indicator
+    const statusDotClass = isConnecting
+        ? "bg-yellow-500"
+        : isConnected
+            ? "bg-green-500"
+            : "bg-red-500";
+
     const ConnectionStatus = () => (
-        <div className={cn(
-            "fixed top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all z-50",
-            isConnected
-                ? "bg-green-500/10 text-green-500"
-                : isConnecting
-                    ? "bg-yellow-500/10 text-yellow-500"
-                    : "bg-red-500/10 text-red-500"
-        )}>
-            {isConnecting ? (
-                <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Connecting...
-                </>
-            ) : isConnected ? (
-                <>
-                    <Wifi className="h-3 w-3" />
-                    Connected
-                </>
-            ) : (
-                <>
-                    <WifiOff className="h-3 w-3" />
-                    Disconnected
-                </>
+        <span
+            className={cn(
+                "inline-flex h-3 w-3 rounded-full border border-background shadow-sm",
+                statusDotClass
             )}
-        </div>
+            title={isConnecting ? "Connecting" : isConnected ? "Connected" : "Disconnected"}
+        />
     );
 
     return (
-        <div className="flex flex-col h-full relative">
+        <div className="flex flex-col h-full relative bg-background">
             <ConnectionStatus />
             <NotificationAlert
                 message={notification.message}
@@ -202,10 +189,13 @@ export function ChatInterface() {
                 onClose={() => setNotification(prev => ({ ...prev, isVisible: false }))}
             />
             {isEmpty ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-8">
+                <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-8 overflow-y-auto">
                     <div className="flex flex-col items-center space-y-4 animate-in fade-in zoom-in duration-500">
-                        <div className="h-16 w-16 bg-gradient-to-br from-primary to-blue-600 rounded-2xl shadow-2xl shadow-primary/20 flex items-center justify-center">
-                            <span className="text-3xl font-bold text-white">M</span>
+                        <div className="flex items-center gap-2">
+                            <div className="h-16 w-16 bg-gradient-to-br from-primary to-blue-600 rounded-2xl shadow-2xl shadow-primary/20 flex items-center justify-center">
+                                <span className="text-3xl font-bold text-white">M</span>
+                            </div>
+                            <ConnectionStatus />
                         </div>
                         <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
                             MoneyMind <span className="text-primary">Finance AI Assistant</span>
@@ -235,8 +225,23 @@ export function ChatInterface() {
                 </div>
             ) : (
                 <>
-                    <ScrollArea className="flex-1 p-4 pb-24">
-                        <div className="max-w-3xl mx-auto space-y-6 pb-4">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-10">
+                        <div className="h-8 w-8 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-primary/10 shadow flex items-center justify-center text-white text-sm font-semibold">
+                            M
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm font-semibold">MoneyMind AI</span>
+                            <div className="flex items-center gap-1.5">
+                                <ConnectionStatus />
+                                <span className="text-[10px] text-muted-foreground">
+                                    {isConnecting ? "Connecting..." : isConnected ? "Online" : "Offline"}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 scroll-smooth" id="chat-messages">
+                        <div className="max-w-3xl mx-auto space-y-6">
                             {messages.map((message) => (
                                 <div
                                     key={message.id}
@@ -245,7 +250,7 @@ export function ChatInterface() {
                                         message.role === 'user' ? "flex-row-reverse" : "flex-row"
                                     )}
                                 >
-                                    <Avatar className="h-8 w-8">
+                                    <Avatar className="h-8 w-8 shrink-0">
                                         <AvatarFallback>{message.role === 'user' ? 'ME' : 'AI'}</AvatarFallback>
                                         {message.role === 'assistant' && <AvatarImage src="/bot-avatar.png" />}
                                     </Avatar>
@@ -307,7 +312,7 @@ export function ChatInterface() {
                             {/* Streaming message */}
                             {isTyping && streamingMessage && (
                                 <div className="flex gap-3">
-                                    <Avatar className="h-8 w-8">
+                                    <Avatar className="h-8 w-8 shrink-0">
                                         <AvatarFallback>AI</AvatarFallback>
                                     </Avatar>
                                     <div className="bg-muted/50 backdrop-blur-sm border border-border/50 rounded-2xl rounded-bl-none px-5 py-3 text-sm">
@@ -318,7 +323,7 @@ export function ChatInterface() {
                             {/* Typing indicator */}
                             {isTyping && !streamingMessage && (
                                 <div className="flex gap-3">
-                                    <Avatar className="h-8 w-8">
+                                    <Avatar className="h-8 w-8 shrink-0">
                                         <AvatarFallback>AI</AvatarFallback>
                                     </Avatar>
                                     <div className="bg-muted rounded-lg p-4">
@@ -330,15 +335,19 @@ export function ChatInterface() {
                                     </div>
                                 </div>
                             )}
-                            <div ref={scrollRef} />
+                            <div ref={scrollRef} className="h-px w-full" />
                         </div>
-                    </ScrollArea>
-                    <ChatInput
-                        onSend={handleSend}
-                        disabled={isTyping || !isConnected}
-                        centered={false}
-                        onNewChat={handleNewChat}
-                    />
+                    </div>
+                    <div className="p-4 bg-background border-t">
+                        <div className="max-w-3xl mx-auto">
+                            <ChatInput
+                                onSend={handleSend}
+                                disabled={isTyping || !isConnected}
+                                centered={false}
+                                onNewChat={handleNewChat}
+                            />
+                        </div>
+                    </div>
                 </>
             )}
         </div>

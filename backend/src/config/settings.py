@@ -17,17 +17,17 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change-me-in-production", alias="SECRET_KEY")
     
     # CORS
-    allowed_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allowed_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3010,http://192.168.0.109:3010",
         alias="ALLOWED_ORIGINS"
     )
     
-    @field_validator('allowed_origins', mode='before')
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',') if origin.strip()]
-        return v
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        """Parse allowed origins from comma-separated string."""
+        if isinstance(self.allowed_origins, str):
+            return [origin.strip() for origin in self.allowed_origins.split(',') if origin.strip()]
+        return self.allowed_origins
     
     # PostgreSQL
     database_url: str = Field(

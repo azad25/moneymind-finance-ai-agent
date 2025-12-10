@@ -21,7 +21,7 @@ interface ApiResponse<T> {
 }
 
 /**
- * Get auth token from localStorage
+ * Get auth token from localStorage and cookies
  */
 function getToken(): string | null {
     if (typeof window === 'undefined') return null;
@@ -37,7 +37,7 @@ export function setTokens(accessToken: string, refreshToken: string) {
 }
 
 /**
- * Clear auth tokens
+ * Clear auth tokens from localStorage
  */
 export function clearTokens() {
     localStorage.removeItem('accessToken');
@@ -218,6 +218,17 @@ export interface Expense {
     created_at: string;
 }
 
+export interface Income {
+    id: string;
+    amount: number;
+    currency: string;
+    source: string;
+    category?: string;
+    description?: string;
+    income_date: string;
+    created_at: string;
+}
+
 export const expensesApi = {
     list: (params?: { start_date?: string; end_date?: string; category?: string }) =>
         apiRequest<Expense[]>(`${API_ENDPOINTS.expenses.list}${params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : ''}`),
@@ -226,6 +237,17 @@ export const expensesApi = {
         apiRequest<Expense>(API_ENDPOINTS.expenses.create, { method: 'POST', body: data }),
 
     getCategories: () => apiRequest<{ category: string; total: number }[]>(API_ENDPOINTS.expenses.categories),
+    
+    getBalance: () => apiRequest<{ balance: number; currency: string; last_updated: string; total_income?: number; total_expenses?: number }>(API_ENDPOINTS.expenses.balance),
+};
+
+// Income API
+export const incomeApi = {
+    list: (params?: { start_date?: string; end_date?: string }) =>
+        apiRequest<Income[]>(`${API_ENDPOINTS.income.list}${params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : ''}`),
+    
+    create: (data: Omit<Income, 'id' | 'created_at'>) =>
+        apiRequest<Income>(API_ENDPOINTS.income.create, { method: 'POST', body: data }),
 };
 
 // ===========================================
@@ -321,6 +343,7 @@ export const healthApi = {
 export default {
     auth: authApi,
     expenses: expensesApi,
+    income: incomeApi,
     subscriptions: subscriptionsApi,
     bills: billsApi,
     goals: goalsApi,

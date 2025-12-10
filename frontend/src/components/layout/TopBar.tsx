@@ -2,12 +2,21 @@
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { useAppSelector } from "@/lib/hooks";
+import { useAuthContext } from "@/components/providers/AuthProvider";
+import { useRouter } from "next/navigation";
 
 export function TopBar() {
     const { stats } = useAppSelector((state) => state.finance);
+    const { logout, user } = useAuthContext();
+    const router = useRouter();
+
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
 
     return (
         <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-6 lg:h-[60px]">
@@ -28,9 +37,20 @@ export function TopBar() {
             <div className="flex items-center gap-4">
                 <div className="text-sm font-medium hidden sm:block">
                     <span className="text-muted-foreground mr-2">Spending:</span>
-                    ${stats.monthlySpending.toLocaleString()}
+                    ${(stats.monthlySpending || 0).toLocaleString()}
                 </div>
-                <Button variant="ghost" size="sm" className="hidden md:flex">
+                {user && (
+                    <div className="text-sm text-muted-foreground hidden lg:block">
+                        {user.email}
+                    </div>
+                )}
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="hidden md:flex gap-2"
+                    onClick={handleLogout}
+                >
+                    <LogOut className="h-4 w-4" />
                     Logout
                 </Button>
             </div>

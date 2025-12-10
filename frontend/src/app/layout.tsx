@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { RouteGuard } from "@/components/providers/RouteGuard";
 import StoreProvider from "./StoreProvider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -23,14 +24,16 @@ export default function RootLayout({
       <body className={inter.className}>
         <StoreProvider>
           <AuthProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="dark"
-              enableSystem
-              disableTransitionOnChange
-            >
-              {children}
-            </ThemeProvider>
+            <RouteGuard>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="dark"
+                enableSystem
+                disableTransitionOnChange
+              >
+                {children}
+              </ThemeProvider>
+            </RouteGuard>
           </AuthProvider>
         </StoreProvider>
       </body>

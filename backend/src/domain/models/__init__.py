@@ -6,6 +6,8 @@ from .bill import Bill
 from .goal import Goal
 from .document import Document
 from .payment import Payment
+from .income import Income
+from .account import Account
 
 __all__ = [
     "User",
@@ -14,5 +16,7 @@ __all__ = [
     "Bill",
     "Goal",
     "Document",
-    "Payment"
+    "Payment",
+    "Income",
+    "Account"
 ]

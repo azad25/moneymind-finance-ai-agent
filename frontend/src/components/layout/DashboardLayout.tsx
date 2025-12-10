@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { cn } from "@/lib/utils";
 
 import { useAppSelector } from "@/lib/hooks";
+import { useRealtimeStats } from "@/lib/hooks/useRealtimeStats";
 
 interface DashboardLayoutProps {
     children: React.ReactNode;
@@ -12,6 +13,9 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const { isSidebarCollapsed } = useAppSelector((state) => state.ui);
+    
+    // Enable real-time stats updates
+    useRealtimeStats();
 
     return (
         <div className="flex h-screen overflow-hidden bg-background">

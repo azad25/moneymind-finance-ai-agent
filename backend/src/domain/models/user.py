@@ -45,6 +45,8 @@ class User(Base):
     bills = relationship("Bill", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+    income = relationship("Income", back_populates="user", cascade="all, delete-orphan")
+    accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"

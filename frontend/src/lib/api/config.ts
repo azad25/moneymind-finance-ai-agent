@@ -3,9 +3,9 @@
  * Environment-based API URLs
  */
 
-// API Base URLs
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-export const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+// API Base URLs - use environment variables
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+export const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8010';
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -34,6 +34,14 @@ export const API_ENDPOINTS = {
         update: (id: string) => `${API_BASE_URL}/api/expenses/${id}`,
         delete: (id: string) => `${API_BASE_URL}/api/expenses/${id}`,
         categories: `${API_BASE_URL}/api/expenses/categories`,
+        balance: `${API_BASE_URL}/api/expenses/balance`,
+    },
+
+    // Income
+    income: {
+        list: `${API_BASE_URL}/api/expenses/income`,
+        create: `${API_BASE_URL}/api/expenses/income`,
+        get: (id: string) => `${API_BASE_URL}/api/expenses/income/${id}`,
     },
 
     // Subscriptions

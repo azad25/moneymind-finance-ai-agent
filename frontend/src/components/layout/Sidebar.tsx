@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, LayoutDashboard, Receipt, CreditCard, Wallet, Target, LogOut, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { toggleSidebar } from "@/lib/features/uiSlice";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 export function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const dispatch = useAppDispatch();
     const { isSidebarCollapsed } = useAppSelector((state) => state.ui);
+    const { logout } = useAuthContext();
+
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
 
     const links = [
         { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -101,13 +110,11 @@ export function Sidebar() {
                         "w-full h-11 text-base font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors overflow-hidden",
                         isSidebarCollapsed ? "justify-center px-0" : "justify-start px-4"
                     )}
-                    asChild
+                    onClick={handleLogout}
                     title={isSidebarCollapsed ? "Logout" : undefined}
                 >
-                    <Link href="/login">
-                        <LogOut className={cn("h-5 w-5 min-w-5", !isSidebarCollapsed && "mr-3")} />
-                        {!isSidebarCollapsed && "Logout"}
-                    </Link>
+                    <LogOut className={cn("h-5 w-5 min-w-5", !isSidebarCollapsed && "mr-3")} />
+                    {!isSidebarCollapsed && "Logout"}
                 </Button>
             </div>
         </div>

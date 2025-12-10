@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,8 +33,9 @@ const GoogleLogo = () => (
     </svg>
 );
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { login, loginWithGoogle, isLoading, error } = useAuthContext();
 
     const [email, setEmail] = useState("");
@@ -47,7 +49,9 @@ export default function LoginPage() {
         const result = await login(email, password);
 
         if (result.success) {
-            router.push("/");
+            // Redirect to the page they were trying to access, or dashboard
+            const redirect = searchParams.get('redirect') || '/';
+            router.push(redirect);
         } else {
             setLocalError(result.error || "Login failed");
         }
@@ -168,5 +172,17 @@ export default function LoginPage() {
                 </Card>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     );
 }

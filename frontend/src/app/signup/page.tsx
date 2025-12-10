@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,8 +33,9 @@ const GoogleLogo = () => (
     </svg>
 );
 
-export default function SignupPage() {
+function SignupForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { register, loginWithGoogle, isLoading, error } = useAuthContext();
 
     const [name, setName] = useState("");
@@ -56,10 +58,17 @@ export default function SignupPage() {
             return;
         }
 
+        if (password.length > 72) {
+            setLocalError("Password is too long (max 72 characters)");
+            return;
+        }
+
         const result = await register(email, password, name);
 
         if (result.success) {
-            router.push("/");
+            // Redirect to the page they were trying to access, or dashboard
+            const redirect = searchParams.get('redirect') || '/';
+            router.push(redirect);
         } else {
             setLocalError(result.error || "Registration failed");
         }
@@ -223,5 +232,17 @@ export default function SignupPage() {
                 </Card>
             </div>
         </div>
+    );
+}
+
+export default function SignupPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <SignupForm />
+        </Suspense>
     );
 }

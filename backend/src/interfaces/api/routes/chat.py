@@ -3,12 +3,13 @@ WebSocket Chat Endpoint - REAL IMPLEMENTATION
 Real-time chat with LangGraph agent streaming
 """
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, Header
 from pydantic import BaseModel
 import json
 import asyncio
 import uuid
 from datetime import datetime
+from src.config.settings import settings
 
 router = APIRouter()
 
@@ -69,6 +70,8 @@ async def websocket_chat(
     """
     WebSocket endpoint for real-time chat with LangGraph agent.
     
+    DEBUG: This endpoint is being called
+    
     Connection URL: ws://localhost:8000/ws/chat?token=<jwt_token>
     
     Client -> Server Message Format:
@@ -95,13 +98,29 @@ async def websocket_chat(
         }
     }
     """
+    # Manual CORS check for WebSocket (CORSMiddleware doesn't handle WebSocket upgrades)
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=" * 80)
+    logger.info("WebSocket connection attempt received!")
+    logger.info(f"Headers: {dict(websocket.headers)}")
+    logger.info(f"Query params: token={token}")
+    logger.info("=" * 80)
+    
     # Generate session ID
     session_id = str(uuid.uuid4())
     
     # TODO: Validate JWT token and get user_id
     user_id = "default_user"  # Replace with actual user from token
     
-    await manager.connect(websocket, session_id, user_id)
+    try:
+        # Accept connection
+        await manager.connect(websocket, session_id, user_id)
+        logger.info(f"✅ WebSocket connected: session={session_id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to accept WebSocket: {e}")
+        raise
     
     # Send welcome message
     await manager.send_json(session_id, {

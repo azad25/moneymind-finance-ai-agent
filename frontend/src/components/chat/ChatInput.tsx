@@ -46,39 +46,39 @@ export function ChatInput({ onSend, disabled, centered = false, onNewChat }: Cha
 
     return (
         <div className={cn(
-            "px-4 pointer-events-none transition-all duration-500 ease-in-out z-10",
-            centered
-                ? "relative w-full"
-                : "absolute bottom-6 left-0 right-0"
+            "w-full transition-all duration-500 ease-in-out",
+            centered ? "relative" : ""
         )}>
             <div className={cn(
-                "max-w-3xl mx-auto flex gap-2 items-center bg-background/95 backdrop-blur-xl p-2 pl-4 rounded-[24px] border border-border/40 shadow-lg pointer-events-auto transition-all duration-300 focus-within:shadow-xl focus-within:border-primary/20",
-                centered && "shadow-2xl border-border/60"
+                "flex gap-2 items-end bg-background p-2 rounded-[26px] border border-input shadow-sm transition-all duration-200 focus-within:shadow-md focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/20",
+                centered ? "shadow-lg border-border/60 p-3" : ""
             )}>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground shrink-0"
-                    onClick={() => onNewChat?.()}
-                    disabled={disabled || centered}
-                    title="New Chat"
-                >
-                    <Plus className="h-4 w-4" />
-                    <span className="sr-only">New Chat</span>
-                </Button>
+                {!centered && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-full hover:bg-muted text-muted-foreground shrink-0 mb-0.5"
+                        onClick={() => onNewChat?.()}
+                        disabled={disabled}
+                        title="New Chat"
+                    >
+                        <Plus className="h-5 w-5" />
+                        <span className="sr-only">New Chat</span>
+                    </Button>
+                )}
 
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground shrink-0"
+                    className="h-9 w-9 rounded-full hover:bg-muted text-muted-foreground shrink-0 mb-0.5"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={disabled}
                 >
-                    <Paperclip className="h-4 w-4" />
+                    <Paperclip className="h-5 w-5" />
                     <span className="sr-only">Attach file</span>
                 </Button>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 py-1.5">
                     {selectedFiles.length > 0 && (
                         <div className="flex gap-2 mb-2 overflow-x-auto py-1 px-1">
                             <FilePreview
@@ -93,7 +93,7 @@ export function ChatInput({ onSend, disabled, centered = false, onNewChat }: Cha
                         onKeyDown={handleKeyDown}
                         placeholder={centered ? "Ask anything..." : "Message MoneyMind..."}
                         disabled={disabled}
-                        className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-0 py-2 h-auto text-base placeholder:text-muted-foreground/40 shadow-none"
+                        className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-0 h-auto text-base placeholder:text-muted-foreground/50 shadow-none min-h-[24px]"
                     />
                 </div>
 
@@ -102,9 +102,9 @@ export function ChatInput({ onSend, disabled, centered = false, onNewChat }: Cha
                     disabled={disabled || (!input.trim() && selectedFiles.length === 0)}
                     size="icon"
                     className={cn(
-                        "h-8 w-8 rounded-full transition-all duration-300 shrink-0",
+                        "h-9 w-9 rounded-full transition-all duration-200 shrink-0 mb-0.5",
                         input.trim() || selectedFiles.length > 0
-                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                             : "bg-muted text-muted-foreground hover:bg-muted/80"
                     )}
                 >

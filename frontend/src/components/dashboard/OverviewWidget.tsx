@@ -15,7 +15,7 @@ export function OverviewWidget() {
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${stats.totalBalance.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">${(stats.totalBalance || 0).toLocaleString()}</div>
                 </CardContent>
             </Card>
             <Card>
@@ -24,7 +24,7 @@ export function OverviewWidget() {
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold text-red-500">-${stats.monthlySpending.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-red-500">-${(stats.monthlySpending || 0).toLocaleString()}</div>
                 </CardContent>
             </Card>
             <Card>
@@ -33,7 +33,7 @@ export function OverviewWidget() {
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{stats.upcomingBillsCount}</div>
+                    <div className="text-2xl font-bold">{stats.upcomingBillsCount || stats.upcomingBills || 0}</div>
                     <p className="text-xs text-muted-foreground">Next 7 days</p>
                 </CardContent>
             </Card>

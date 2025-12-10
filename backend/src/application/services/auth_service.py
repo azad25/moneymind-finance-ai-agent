@@ -14,7 +14,13 @@ from src.config.settings import settings
 
 
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Configure bcrypt to handle the 72-byte limitation gracefully
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12,
+    bcrypt__ident="2b"
+)
 
 
 class AuthService:
@@ -23,11 +29,19 @@ class AuthService:
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt."""
+        # Bcrypt has a 72 byte limit, truncate password to 72 bytes
+        # This ensures compatibility with bcrypt's limitations
+        if len(password.encode('utf-8')) > 72:
+            # Truncate to 72 bytes safely
+            password = password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
         return pwd_context.hash(password)
     
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
+        # Bcrypt has a 72 byte limit, truncate password to 72 bytes
+        if len(plain_password.encode('utf-8')) > 72:
+            plain_password = plain_password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
         return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod

@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 import httpx
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
@@ -210,6 +211,7 @@ async def google_oauth_initiate():
 
 @router.get("/google/callback")
 async def google_oauth_callback(
+    request: Request,
     code: Optional[str] = None,
     error: Optional[str] = None,
     state: Optional[str] = None,
@@ -218,7 +220,7 @@ async def google_oauth_callback(
     Handle Google OAuth callback.
     
     Exchanges authorization code for tokens and creates/updates user.
-    Returns access and refresh tokens.
+    Redirects to frontend with tokens.
     """
     if error:
         raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
@@ -283,19 +285,26 @@ async def google_oauth_callback(
             )
             refresh_token = auth_service.create_refresh_token(user["id"])
             
-            # Return tokens (frontend should handle this)
-            return {
+            # Redirect to frontend callback page with tokens
+            from urllib.parse import urlencode
+            
+            # Determine frontend URL from request origin or use default
+            origin = request.headers.get("origin", "http://localhost:3010")
+            # Remove trailing slash if present
+            origin = origin.rstrip('/')
+            
+            # Frontend callback URL
+            frontend_callback = f"{origin}/auth/callback"
+            
+            # Add tokens as query parameters
+            params = {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "token_type": "bearer",
-                "user": {
-                    "id": user["id"],
-                    "email": user["email"],
-                    "name": user["name"],
-                    "picture": user["picture"],
-                    "gmail_connected": user["gmail_connected"],
-                },
             }
+            
+            redirect_url = f"{frontend_callback}?{urlencode(params)}"
+            
+            return RedirectResponse(url=redirect_url)
             
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"OAuth request failed: {str(e)}")

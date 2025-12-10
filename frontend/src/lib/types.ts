@@ -63,7 +63,10 @@ export interface MonthlyData {
 }
 
 export interface DashboardStats {
-  totalBalance: number;
+  totalBalance?: number;
   monthlySpending: number;
-  upcomingBillsCount: number;
+  totalSubscriptions?: number;
+  upcomingBills?: number;
+  upcomingBillsCount?: number;
+  savingsProgress?: number;
 }

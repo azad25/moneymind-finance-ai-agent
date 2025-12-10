@@ -20,6 +20,7 @@ from langchain_core.tools import BaseTool
 
 from .state import AgentState, create_initial_state
 from src.langchain.tools.expense_tools import expense_tools
+from src.langchain.tools.income_tools import income_tools
 from src.langchain.tools.chart_tool import generate_chart
 from src.langchain.tools.exchange_rate_tool import convert_currency, get_exchange_rate
 from src.langchain.tools.email_tools import email_tools
@@ -43,6 +44,13 @@ EXPENSE MANAGEMENT:
 - list_upcoming_bills: List bills due soon
 - create_goal: Create a financial savings goal
 - list_goals: List all financial goals
+
+INCOME & BALANCE:
+- create_income: Add income record (salary, freelance, etc.)
+- list_income: List income records
+- get_balance: Get current account balance
+- get_income_vs_expenses: Compare income vs expenses
+- get_monthly_summary: Get complete monthly financial summary
 
 FINANCIAL DATA:
 - convert_currency: Convert between currencies using real-time rates
@@ -77,6 +85,8 @@ def get_all_tools() -> List[BaseTool]:
     return [
         # Expense tools
         *expense_tools,
+        # Income and balance tools
+        *income_tools,
         # Financial data tools
         convert_currency,
         get_exchange_rate,
