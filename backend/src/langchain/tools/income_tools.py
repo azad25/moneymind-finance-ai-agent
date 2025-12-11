@@ -47,10 +47,13 @@ async def create_income(
         inc_date = date.today()
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             income = Income(
                 id=str(uuid.uuid4()),
-                user_id="default_user",  # TODO: Get from context
+                user_id=user_id,
                 amount=Decimal(str(amount)),
                 currency=currency.upper(),
                 source=source,
@@ -61,6 +64,10 @@ async def create_income(
             
             session.add(income)
             await session.commit()
+            
+            # Invalidate balance cache
+            from src.application.services.balance_service import BalanceService
+            await BalanceService.invalidate_cache(user_id)
             
             return (
                 f"✅ **Income Added**\n\n"
@@ -96,8 +103,11 @@ async def list_income(
     from src.domain.models.income import Income
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
-            query = select(Income).where(Income.user_id == "default_user")
+            query = select(Income).where(Income.user_id == user_id)
             
             # Apply filters
             if start_date:
@@ -150,40 +160,28 @@ async def get_balance() -> str:
     Returns:
         Current balance with breakdown of income and expenses
     """
-    from src.infrastructure.database.postgres import async_session_factory
-    from src.domain.models import Income, Expense
+    from src.application.services.balance_service import BalanceService
+    from src.langchain.context import get_user_context
     
     try:
-        async with async_session_factory() as session:
-            # Calculate total income
-            income_result = await session.execute(
-                select(func.sum(Income.amount)).where(Income.user_id == "default_user")
-            )
-            total_income = income_result.scalar() or Decimal("0")
-            
-            # Calculate total expenses
-            expense_result = await session.execute(
-                select(func.sum(Expense.amount)).where(Expense.user_id == "default_user")
-            )
-            total_expenses = expense_result.scalar() or Decimal("0")
-            
-            # Calculate balance
-            balance = total_income - total_expenses
-            
-            # Format output
-            output = "💰 **Your Financial Summary**\n\n"
-            output += f"**Total Income:** {float(total_income):,.2f} USD\n"
-            output += f"**Total Expenses:** {float(total_expenses):,.2f} USD\n"
-            output += f"**Current Balance:** {float(balance):,.2f} USD\n\n"
-            
-            if balance > 0:
-                output += "✅ You're in the positive! Keep it up! 🎉"
-            elif balance == 0:
-                output += "⚖️ You're breaking even."
-            else:
-                output += "⚠️ You're spending more than you earn. Consider reviewing your expenses."
-            
-            return output
+        user_id = get_user_context()
+        # Use centralized balance service
+        result = await BalanceService.get_balance(user_id)
+        
+        # Format output
+        output = "💰 **Your Financial Summary**\n\n"
+        output += f"**Total Income:** {result['total_income']:,.2f} USD\n"
+        output += f"**Total Expenses:** {result['total_expenses']:,.2f} USD\n"
+        output += f"**Current Balance:** {result['balance']:,.2f} USD\n\n"
+        
+        if result['balance'] > 0:
+            output += "✅ You're in the positive! Keep it up! 🎉"
+        elif result['balance'] == 0:
+            output += "⚖️ You're breaking even."
+        else:
+            output += "⚠️ You're spending more than you earn. Consider reviewing your expenses."
+        
+        return output
             
     except Exception as e:
         return f"❌ Error calculating balance: {str(e)}"
@@ -204,8 +202,7 @@ async def get_income_vs_expenses(
     Returns:
         Comparison of income vs expenses with net amount
     """
-    from src.infrastructure.database.postgres import async_session_factory
-    from src.domain.models import Income, Expense
+    from src.application.services.balance_service import BalanceService
     
     # Default to current month
     if not start_date:
@@ -226,48 +223,32 @@ async def get_income_vs_expenses(
             end = date.today()
     
     try:
-        async with async_session_factory() as session:
-            # Get income for period
-            income_result = await session.execute(
-                select(func.sum(Income.amount)).where(
-                    Income.user_id == "default_user",
-                    Income.income_date >= start,
-                    Income.income_date <= end,
-                )
-            )
-            period_income = income_result.scalar() or Decimal("0")
-            
-            # Get expenses for period
-            expense_result = await session.execute(
-                select(func.sum(Expense.amount)).where(
-                    Expense.user_id == "default_user",
-                    Expense.expense_date >= start,
-                    Expense.expense_date <= end,
-                )
-            )
-            period_expenses = expense_result.scalar() or Decimal("0")
-            
-            # Calculate net
-            net = period_income - period_expenses
-            savings_rate = (net / period_income * 100) if period_income > 0 else 0
-            
-            # Format output
-            output = f"📊 **Income vs Expenses**\n"
-            output += f"*{start.strftime('%B %d')} - {end.strftime('%B %d, %Y')}*\n\n"
-            
-            output += f"**Income:** {float(period_income):,.2f} USD\n"
-            output += f"**Expenses:** {float(period_expenses):,.2f} USD\n"
-            output += f"**Net:** {float(net):,.2f} USD\n"
-            output += f"**Savings Rate:** {float(savings_rate):.1f}%\n\n"
-            
-            if net > 0:
-                output += f"✅ You saved {float(net):,.2f} USD this period!"
-            elif net == 0:
-                output += "⚖️ You broke even this period."
-            else:
-                output += f"⚠️ You overspent by {float(abs(net)):,.2f} USD this period."
-            
-            return output
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
+        # Use centralized balance service
+        result = await BalanceService.get_balance(user_id, start, end)
+        
+        # Calculate savings rate
+        savings_rate = (result['balance'] / result['total_income'] * 100) if result['total_income'] > 0 else 0
+        
+        # Format output
+        output = f"📊 **Income vs Expenses**\n"
+        output += f"*{start.strftime('%B %d')} - {end.strftime('%B %d, %Y')}*\n\n"
+        
+        output += f"**Income:** {result['total_income']:,.2f} USD\n"
+        output += f"**Expenses:** {result['total_expenses']:,.2f} USD\n"
+        output += f"**Net:** {result['balance']:,.2f} USD\n"
+        output += f"**Savings Rate:** {savings_rate:.1f}%\n\n"
+        
+        if result['balance'] > 0:
+            output += f"✅ You saved {result['balance']:,.2f} USD this period!"
+        elif result['balance'] == 0:
+            output += "⚖️ You broke even this period."
+        else:
+            output += f"⚠️ You overspent by {abs(result['balance']):,.2f} USD this period."
+        
+        return output
             
     except Exception as e:
         return f"❌ Error comparing income vs expenses: {str(e)}"
@@ -281,65 +262,49 @@ async def get_monthly_summary() -> str:
     Returns:
         Comprehensive monthly financial summary with income, expenses, and balance
     """
+    from src.application.services.balance_service import BalanceService
     from src.infrastructure.database.postgres import async_session_factory
-    from src.domain.models import Income, Expense
+    from src.domain.models import Expense
     
     today = date.today()
     start_of_month = date(today.year, today.month, 1)
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
+        # Use centralized balance service for income/expense totals
+        result = await BalanceService.get_balance(user_id, start_of_month, today)
+        
+        # Get expense breakdown by category (still need database for this)
         async with async_session_factory() as session:
-            # Get monthly income
-            income_result = await session.execute(
-                select(func.sum(Income.amount)).where(
-                    Income.user_id == "default_user",
-                    Income.income_date >= start_of_month,
-                    Income.income_date <= today,
-                )
-            )
-            monthly_income = income_result.scalar() or Decimal("0")
-            
-            # Get monthly expenses
-            expense_result = await session.execute(
-                select(func.sum(Expense.amount)).where(
-                    Expense.user_id == "default_user",
-                    Expense.expense_date >= start_of_month,
-                    Expense.expense_date <= today,
-                )
-            )
-            monthly_expenses = expense_result.scalar() or Decimal("0")
-            
-            # Get expense breakdown by category
             category_result = await session.execute(
                 select(
                     Expense.category,
                     func.sum(Expense.amount).label("total")
                 ).where(
-                    Expense.user_id == "default_user",
+                    Expense.user_id == user_id,
                     Expense.expense_date >= start_of_month,
                     Expense.expense_date <= today,
                 ).group_by(Expense.category).order_by(func.sum(Expense.amount).desc()).limit(5)
             )
             top_categories = category_result.all()
-            
-            # Calculate net
-            net = monthly_income - monthly_expenses
-            
-            # Format output
-            output = f"📊 **Monthly Financial Summary**\n"
-            output += f"*{start_of_month.strftime('%B %Y')}*\n\n"
-            
-            output += f"💰 **Income:** {float(monthly_income):,.2f} USD\n"
-            output += f"💸 **Expenses:** {float(monthly_expenses):,.2f} USD\n"
-            output += f"💵 **Net:** {float(net):,.2f} USD\n\n"
-            
-            if top_categories:
-                output += "**Top Spending Categories:**\n"
-                for cat in top_categories:
-                    percentage = (float(cat.total) / float(monthly_expenses) * 100) if monthly_expenses > 0 else 0
-                    output += f"• {cat.category.title()}: {float(cat.total):,.2f} ({percentage:.1f}%)\n"
-            
-            return output
+        
+        # Format output
+        output = f"📊 **Monthly Financial Summary**\n"
+        output += f"*{start_of_month.strftime('%B %Y')}*\n\n"
+        
+        output += f"💰 **Income:** {result['total_income']:,.2f} USD\n"
+        output += f"💸 **Expenses:** {result['total_expenses']:,.2f} USD\n"
+        output += f"💵 **Net:** {result['balance']:,.2f} USD\n\n"
+        
+        if top_categories:
+            output += "**Top Spending Categories:**\n"
+            for cat in top_categories:
+                percentage = (float(cat.total) / result['total_expenses'] * 100) if result['total_expenses'] > 0 else 0
+                output += f"• {cat.category.title()}: {float(cat.total):,.2f} ({percentage:.1f}%)\n"
+        
+        return output
             
     except Exception as e:
         return f"❌ Error generating monthly summary: {str(e)}"

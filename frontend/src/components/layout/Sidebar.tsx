@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, LayoutDashboard, Receipt, CreditCard, Wallet, Target, LogOut, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutDashboard, Receipt, CreditCard, Wallet, Target, LogOut, Settings, FileText, Landmark } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
@@ -25,9 +25,11 @@ export function Sidebar() {
     const links = [
         { href: "/", label: "Overview", icon: LayoutDashboard },
         { href: "/expenses", label: "Expenses", icon: Receipt },
+        { href: "/accounts", label: "Accounts", icon: Landmark },
         { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
         { href: "/bills", label: "Bills & Loans", icon: Wallet },
         { href: "/goals", label: "Goals", icon: Target },
+        { href: "/documents", label: "Documents", icon: FileText },
     ];
 
     return (

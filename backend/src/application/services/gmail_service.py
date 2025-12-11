@@ -11,12 +11,16 @@ from email.utils import parsedate_to_datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
 from src.config.settings import settings
 
 
 class GmailService:
-    """Service for Gmail API operations."""
+    """Service for Gmail API operations with full CRUD support."""
     
     def __init__(self, user_id: str = "default_user"):
         self.user_id = user_id
@@ -63,14 +67,19 @@ class GmailService:
             if not user or not user.google_refresh_token:
                 raise ValueError("Gmail not connected")
             
-            # Create credentials
+            # Create credentials with full Gmail access
             self._credentials = Credentials(
                 token=None,
                 refresh_token=user.google_refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=settings.google_client_id,
                 client_secret=settings.google_client_secret,
-                scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+                scopes=[
+                    "https://www.googleapis.com/auth/gmail.readonly",
+                    "https://www.googleapis.com/auth/gmail.send",
+                    "https://www.googleapis.com/auth/gmail.modify",
+                    "https://www.googleapis.com/auth/gmail.compose",
+                ],
             )
             
             # Refresh if needed
@@ -303,3 +312,266 @@ class GmailService:
             "net_change": total_credits - total_debits,
             "top_merchants": top_merchants,
         }
+    
+    async def send_email(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Send an email via Gmail.
+        
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body (plain text or HTML)
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            html: Whether body is HTML
+        
+        Returns:
+            Sent message details
+        """
+        service = await self._get_service()
+        
+        try:
+            # Create message
+            if html:
+                message = MIMEMultipart("alternative")
+                message.attach(MIMEText(body, "html"))
+            else:
+                message = MIMEText(body)
+            
+            message["To"] = to
+            message["Subject"] = subject
+            
+            if cc:
+                message["Cc"] = cc
+            if bcc:
+                message["Bcc"] = bcc
+            
+            # Encode message
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+            
+            # Send message
+            sent_message = service.users().messages().send(
+                userId="me",
+                body={"raw": raw_message}
+            ).execute()
+            
+            return {
+                "id": sent_message["id"],
+                "thread_id": sent_message.get("threadId"),
+                "to": to,
+                "subject": subject,
+                "status": "sent",
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to send email: {str(e)}")
+    
+    async def reply_to_email(
+        self,
+        message_id: str,
+        body: str,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Reply to an email.
+        
+        Args:
+            message_id: ID of the message to reply to
+            body: Reply body
+            html: Whether body is HTML
+        
+        Returns:
+            Sent reply details
+        """
+        service = await self._get_service()
+        
+        try:
+            # Get original message
+            original = service.users().messages().get(
+                userId="me",
+                id=message_id,
+                format="metadata",
+                metadataHeaders=["Subject", "From", "To", "Message-ID"],
+            ).execute()
+            
+            headers = {h["name"]: h["value"] for h in original["payload"]["headers"]}
+            
+            # Create reply
+            if html:
+                message = MIMEMultipart("alternative")
+                message.attach(MIMEText(body, "html"))
+            else:
+                message = MIMEText(body)
+            
+            # Set reply headers
+            message["To"] = headers.get("From")
+            message["Subject"] = f"Re: {headers.get('Subject', '')}"
+            message["In-Reply-To"] = headers.get("Message-ID")
+            message["References"] = headers.get("Message-ID")
+            
+            # Encode and send
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+            
+            sent_message = service.users().messages().send(
+                userId="me",
+                body={
+                    "raw": raw_message,
+                    "threadId": original.get("threadId"),
+                }
+            ).execute()
+            
+            return {
+                "id": sent_message["id"],
+                "thread_id": sent_message.get("threadId"),
+                "in_reply_to": message_id,
+                "status": "sent",
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to reply to email: {str(e)}")
+    
+    async def mark_as_read(self, message_id: str) -> bool:
+        """Mark an email as read."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"removeLabelIds": ["UNREAD"]}
+            ).execute()
+            return True
+        except:
+            return False
+    
+    async def mark_as_unread(self, message_id: str) -> bool:
+        """Mark an email as unread."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"addLabelIds": ["UNREAD"]}
+            ).execute()
+            return True
+        except:
+            return False
+    
+    async def archive_email(self, message_id: str) -> bool:
+        """Archive an email (remove from inbox)."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"removeLabelIds": ["INBOX"]}
+            ).execute()
+            return True
+        except:
+            return False
+    
+    async def delete_email(self, message_id: str) -> bool:
+        """Move email to trash."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().trash(
+                userId="me",
+                id=message_id
+            ).execute()
+            return True
+        except:
+            return False
+    
+    async def add_label(self, message_id: str, label_name: str) -> bool:
+        """Add a label to an email."""
+        service = await self._get_service()
+        
+        try:
+            # Get or create label
+            labels = service.users().labels().list(userId="me").execute()
+            label_id = None
+            
+            for label in labels.get("labels", []):
+                if label["name"].lower() == label_name.lower():
+                    label_id = label["id"]
+                    break
+            
+            if not label_id:
+                # Create label
+                new_label = service.users().labels().create(
+                    userId="me",
+                    body={"name": label_name}
+                ).execute()
+                label_id = new_label["id"]
+            
+            # Add label to message
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"addLabelIds": [label_id]}
+            ).execute()
+            
+            return True
+        except:
+            return False
+    
+    async def get_unread_count(self) -> int:
+        """Get count of unread emails."""
+        service = await self._get_service()
+        
+        try:
+            profile = service.users().getProfile(userId="me").execute()
+            return profile.get("messagesTotal", 0)
+        except:
+            return 0
+    
+    async def get_recent_emails(self, max_results: int = 10) -> List[Dict[str, Any]]:
+        """Get most recent emails."""
+        return await self.search_emails(query="", max_results=max_results)
+    
+    async def get_unread_emails(self, max_results: int = 10) -> List[Dict[str, Any]]:
+        """Get unread emails."""
+        return await self.search_emails(query="is:unread", max_results=max_results)
+    
+    async def get_starred_emails(self, max_results: int = 10) -> List[Dict[str, Any]]:
+        """Get starred emails."""
+        return await self.search_emails(query="is:starred", max_results=max_results)
+    
+    async def star_email(self, message_id: str) -> bool:
+        """Star an email."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"addLabelIds": ["STARRED"]}
+            ).execute()
+            return True
+        except:
+            return False
+    
+    async def unstar_email(self, message_id: str) -> bool:
+        """Remove star from an email."""
+        service = await self._get_service()
+        
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"removeLabelIds": ["STARRED"]}
+            ).execute()
+            return True
+        except:
+            return False

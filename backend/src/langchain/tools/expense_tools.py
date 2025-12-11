@@ -55,10 +55,13 @@ async def create_expense(
         exp_date = date.today()
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             expense = Expense(
                 id=str(uuid.uuid4()),
-                user_id="default_user",  # TODO: Get from context
+                user_id=user_id,
                 amount=Decimal(str(amount)),
                 currency=currency.upper(),
                 category=category.lower(),
@@ -70,6 +73,10 @@ async def create_expense(
             
             session.add(expense)
             await session.commit()
+            
+            # Invalidate balance cache
+            from src.application.services.balance_service import BalanceService
+            await BalanceService.invalidate_cache(user_id)
             
             return (
                 f"✅ **Expense Created**\n\n"
@@ -107,8 +114,11 @@ async def list_expenses(
     from src.domain.models.expense import Expense
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
-            query = select(Expense).where(Expense.user_id == "default_user")
+            query = select(Expense).where(Expense.user_id == user_id)
             
             # Apply filters
             if start_date:
@@ -193,13 +203,16 @@ async def get_spending_by_category(
             end = date.today()
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             query = select(
                 Expense.category,
                 func.sum(Expense.amount).label("total"),
                 func.count(Expense.id).label("count")
             ).where(
-                Expense.user_id == "default_user",
+                Expense.user_id == user_id,
                 Expense.expense_date >= start,
                 Expense.expense_date <= end,
             ).group_by(Expense.category).order_by(func.sum(Expense.amount).desc())
@@ -269,10 +282,13 @@ async def create_subscription(
         return "❌ Invalid date format. Use YYYY-MM-DD."
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             subscription = Subscription(
                 id=str(uuid.uuid4()),
-                user_id="default_user",
+                user_id=user_id,
                 name=name,
                 amount=Decimal(str(amount)),
                 currency=currency.upper(),
@@ -308,9 +324,12 @@ async def list_subscriptions() -> str:
     from src.domain.models.subscription import Subscription
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             query = select(Subscription).where(
-                Subscription.user_id == "default_user",
+                Subscription.user_id == user_id,
                 Subscription.is_active == True,
             ).order_by(Subscription.next_billing_date)
             
@@ -379,10 +398,13 @@ async def create_bill(
         return "❌ Invalid date format. Use YYYY-MM-DD."
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             bill = Bill(
                 id=str(uuid.uuid4()),
-                user_id="default_user",
+                user_id=user_id,
                 name=name,
                 amount=Decimal(str(amount)),
                 currency=currency.upper(),
@@ -425,8 +447,11 @@ async def list_upcoming_bills(days: int = 30) -> str:
             today = date.today()
             end_date = today + timedelta(days=days)
             
+            from src.langchain.context import get_user_context
+            user_id = get_user_context()
+            
             query = select(Bill).where(
-                Bill.user_id == "default_user",
+                Bill.user_id == user_id,
                 Bill.is_paid == False,
                 Bill.due_date >= today,
                 Bill.due_date <= end_date,
@@ -503,10 +528,13 @@ async def create_goal(
     monthly_savings = target_amount / months_left
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             goal = Goal(
                 id=str(uuid.uuid4()),
-                user_id="default_user",
+                user_id=user_id,
                 name=name,
                 target_amount=Decimal(str(target_amount)),
                 current_amount=Decimal("0"),
@@ -543,9 +571,12 @@ async def list_goals() -> str:
     from src.domain.models.goal import Goal
     
     try:
+        from src.langchain.context import get_user_context
+        user_id = get_user_context()
+        
         async with async_session_factory() as session:
             query = select(Goal).where(
-                Goal.user_id == "default_user",
+                Goal.user_id == user_id,
             ).order_by(Goal.deadline)
             
             result = await session.execute(query)

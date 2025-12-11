@@ -333,6 +333,66 @@ export const gmailApi = {
 };
 
 // ===========================================
+// Documents API
+// ===========================================
+
+export interface Document {
+    id: string;
+    filename: string;
+    content_type: string;
+    file_size: number;
+    chunk_count: number;
+    description?: string;
+    status: 'processing' | 'ready' | 'failed';
+    created_at: string;
+}
+
+export const documentsApi = {
+    list: () => apiRequest<{ documents: Document[]; total: number }>(API_ENDPOINTS.documents.list),
+    
+    upload: async (file: File, description?: string) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (description) formData.append('description', description);
+
+        const token = getToken();
+        const response = await fetch(API_ENDPOINTS.documents.upload, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            body: formData,
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            return {
+                data: null,
+                error: data?.detail || 'Upload failed',
+                status: response.status,
+            };
+        }
+
+        return {
+            data,
+            error: null,
+            status: response.status,
+        };
+    },
+
+    get: (id: string) => apiRequest<Document>(API_ENDPOINTS.documents.get(id)),
+    
+    delete: (id: string) => apiRequest(API_ENDPOINTS.documents.delete(id), { method: 'DELETE' }),
+    
+    query: (query: string, top_k?: number) =>
+        apiRequest(API_ENDPOINTS.documents.query, {
+            method: 'POST',
+            body: { query, top_k: top_k || 5 },
+        }),
+};
+
+// ===========================================
 // Health API
 // ===========================================
 
@@ -348,5 +408,6 @@ export default {
     bills: billsApi,
     goals: goalsApi,
     gmail: gmailApi,
+    documents: documentsApi,
     health: healthApi,
 };

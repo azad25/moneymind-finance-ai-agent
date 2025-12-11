@@ -280,11 +280,350 @@ async def get_email_insights() -> str:
         return f"❌ Insights error: {str(e)}"
 
 
+@tool
+async def send_email(
+    to: str,
+    subject: str,
+    body: str,
+) -> str:
+    """
+    Send an email via Gmail.
+    
+    Args:
+        to: Recipient email address
+        subject: Email subject line
+        body: Email body content
+    
+    Returns:
+        Confirmation of sent email
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in to send emails."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected. Please connect your Gmail account in Settings."
+        
+        # Send email
+        result = await service.send_email(
+            to=to,
+            subject=subject,
+            body=body,
+        )
+        
+        return f"✅ **Email Sent Successfully**\n\n" \
+               f"To: {to}\n" \
+               f"Subject: {subject}\n" \
+               f"Message ID: {result['id']}"
+        
+    except Exception as e:
+        return f"❌ Failed to send email: {str(e)}"
+
+
+@tool
+async def reply_to_email(
+    message_id: str,
+    body: str,
+) -> str:
+    """
+    Reply to an email.
+    
+    Args:
+        message_id: ID of the email to reply to
+        body: Reply message content
+    
+    Returns:
+        Confirmation of sent reply
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in to reply to emails."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        # Send reply
+        result = await service.reply_to_email(
+            message_id=message_id,
+            body=body,
+        )
+        
+        return f"✅ **Reply Sent Successfully**\n\n" \
+               f"In reply to: {message_id}\n" \
+               f"Thread ID: {result['thread_id']}"
+        
+    except Exception as e:
+        return f"❌ Failed to send reply: {str(e)}"
+
+
+@tool
+async def get_email_details(message_id: str) -> str:
+    """
+    Get full details of a specific email.
+    
+    Args:
+        message_id: Gmail message ID
+    
+    Returns:
+        Full email content including subject, sender, date, and body
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in to read emails."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        # Get email
+        email = await service.get_email_by_id(message_id)
+        
+        if not email:
+            return f"📧 Email not found: {message_id}"
+        
+        output = f"📧 **Email Details**\n\n"
+        output += f"**From:** {email.get('from', 'Unknown')}\n"
+        output += f"**Subject:** {email.get('subject', 'No subject')}\n"
+        output += f"**Date:** {email.get('date', 'Unknown')}\n\n"
+        output += f"**Body:**\n{email.get('body', 'No content')[:1000]}"
+        
+        if len(email.get('body', '')) > 1000:
+            output += "\n\n*[Content truncated]*"
+        
+        return output
+        
+    except Exception as e:
+        return f"❌ Error reading email: {str(e)}"
+
+
+@tool
+async def get_recent_emails(max_results: int = 10) -> str:
+    """
+    Get the most recent emails from inbox.
+    
+    Args:
+        max_results: Number of emails to retrieve (default: 10)
+    
+    Returns:
+        List of recent emails
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in to view emails."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        emails = await service.get_recent_emails(max_results=max_results)
+        
+        if not emails:
+            return "📧 No recent emails found."
+        
+        output = f"📧 **Recent Emails** ({len(emails)} messages)\n\n"
+        output += "| Subject | From | Date |\n"
+        output += "|---------|------|------|\n"
+        
+        for email in emails:
+            subject = email.get("subject", "No subject")[:40]
+            sender = email.get("from", "Unknown")[:30]
+            date = email.get("date", "")[:16]
+            output += f"| {subject} | {sender} | {date} |\n"
+        
+        return output
+        
+    except Exception as e:
+        return f"❌ Error fetching emails: {str(e)}"
+
+
+@tool
+async def get_unread_emails(max_results: int = 10) -> str:
+    """
+    Get unread emails from inbox.
+    
+    Args:
+        max_results: Number of emails to retrieve (default: 10)
+    
+    Returns:
+        List of unread emails
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in to view emails."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        emails = await service.get_unread_emails(max_results=max_results)
+        
+        if not emails:
+            return "📧 No unread emails. Your inbox is clean! ✨"
+        
+        output = f"📧 **Unread Emails** ({len(emails)} messages)\n\n"
+        output += "| Subject | From | Date |\n"
+        output += "|---------|------|------|\n"
+        
+        for email in emails:
+            subject = email.get("subject", "No subject")[:40]
+            sender = email.get("from", "Unknown")[:30]
+            date = email.get("date", "")[:16]
+            output += f"| {subject} | {sender} | {date} |\n"
+        
+        return output
+        
+    except Exception as e:
+        return f"❌ Error fetching unread emails: {str(e)}"
+
+
+@tool
+async def mark_email_as_read(message_id: str) -> str:
+    """
+    Mark an email as read.
+    
+    Args:
+        message_id: Gmail message ID
+    
+    Returns:
+        Confirmation message
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        success = await service.mark_as_read(message_id)
+        
+        if success:
+            return f"✅ Email marked as read"
+        else:
+            return f"❌ Failed to mark email as read"
+        
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@tool
+async def archive_email(message_id: str) -> str:
+    """
+    Archive an email (remove from inbox).
+    
+    Args:
+        message_id: Gmail message ID
+    
+    Returns:
+        Confirmation message
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        success = await service.archive_email(message_id)
+        
+        if success:
+            return f"✅ Email archived"
+        else:
+            return f"❌ Failed to archive email"
+        
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+@tool
+async def delete_email(message_id: str) -> str:
+    """
+    Delete an email (move to trash).
+    
+    Args:
+        message_id: Gmail message ID
+    
+    Returns:
+        Confirmation message
+    """
+    from src.application.services.gmail_service import GmailService
+    from src.langchain.context import get_user_context
+    
+    try:
+        user_context = get_user_context()
+        if not user_context or not user_context.get("user_id"):
+            return "📧 Please log in."
+        
+        service = GmailService(user_id=user_context["user_id"])
+        
+        if not await service.is_connected():
+            return "📧 Gmail is not connected."
+        
+        success = await service.delete_email(message_id)
+        
+        if success:
+            return f"✅ Email moved to trash"
+        else:
+            return f"❌ Failed to delete email"
+        
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
 # Export email tools
 email_tools = [
+    # Read operations
     search_emails,
+    get_recent_emails,
+    get_unread_emails,
+    get_email_details,
     get_banking_emails,
     summarize_emails,
     extract_transactions_from_email,
     get_email_insights,
+    # Write operations
+    send_email,
+    reply_to_email,
+    # Update operations
+    mark_email_as_read,
+    archive_email,
+    delete_email,
 ]

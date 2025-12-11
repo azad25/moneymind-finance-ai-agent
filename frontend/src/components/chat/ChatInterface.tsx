@@ -76,9 +76,19 @@ export function ChatInterface() {
                     break;
 
                 case 'chart':
-                    // Chart data - embed in message
+                    // Chart data - embed in message with proper format
                     if (message.chart) {
-                        const chartContent = `\`\`\`chart\n${JSON.stringify(message.chart)}\n\`\`\``;
+                        // Ensure chart has required fields with defaults
+                        const chartData = {
+                            type: message.chart.type || 'pie',
+                            title: message.chart.title || 'Chart',
+                            data: message.chart.data || [],
+                            colors: message.chart.colors || ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'],
+                            dataKey: message.chart.dataKey,
+                            nameKey: message.chart.nameKey,
+                            category: message.chart.category,
+                        };
+                        const chartContent = `\`\`\`chart\n${JSON.stringify(chartData)}\n\`\`\``;
                         const chartMessage: Message = {
                             id: Date.now().toString(),
                             role: 'assistant',

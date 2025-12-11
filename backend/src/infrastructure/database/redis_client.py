@@ -52,6 +52,19 @@ class RedisClient:
         """Delete key from cache."""
         await self.client.delete(key)
     
+    async def delete_pattern(self, pattern: str):
+        """Delete all keys matching a pattern."""
+        keys = []
+        async for key in self.client.scan_iter(match=pattern):
+            keys.append(key)
+        
+        if keys:
+            await self.client.delete(*keys)
+    
+    async def get_client(self) -> Optional[Redis]:
+        """Get the underlying Redis client for advanced operations."""
+        return self._client
+    
     # Session operations
     async def get_session(self, session_id: str) -> Optional[dict]:
         """Get session data."""

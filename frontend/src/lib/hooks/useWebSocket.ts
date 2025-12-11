@@ -17,6 +17,9 @@ export interface ChatMessage {
         title: string;
         data: unknown[];
         colors?: string[];
+        dataKey?: string;
+        nameKey?: string;
+        category?: string;
     };
 }
 

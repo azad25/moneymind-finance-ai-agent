@@ -148,11 +148,11 @@ class LLMFactory:
             )
             
             # Try to parse tool calls from response
-            tool_call = self._parse_tool_call_from_response(response, tools)
-            if tool_call:
+            tool_calls = self._parse_tool_call_from_response(response, tools)
+            if tool_calls:
                 return {
                     "content": "",
-                    "tool_calls": [tool_call],
+                    "tool_calls": tool_calls,
                 }
             
             return {"content": response}
@@ -186,11 +186,11 @@ class LLMFactory:
             )
             
             # Parse tool calls
-            tool_call = self._parse_tool_call_from_response(response, tools)
-            if tool_call:
+            tool_calls = self._parse_tool_call_from_response(response, tools)
+            if tool_calls:
                 return {
                     "content": "",
-                    "tool_calls": [tool_call],
+                    "tool_calls": tool_calls,
                 }
             
             return {"content": response}
@@ -216,7 +216,7 @@ class LLMFactory:
         self,
         response: str,
         tools: List[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Parse tool calls from LLM response.
         
@@ -224,11 +224,14 @@ class LLMFactory:
         - Tool: tool_name(arg1=value1, arg2=value2)
         - I'll use tool_name with {"arg": "value"}
         - <tool_call>{"name": "...", "args": {...}}</tool_call>
+        
+        Returns a list of tool calls to support multiple intents in one message.
         """
         import re
         
         response_lower = response.lower()
         tool_names = [t["function"]["name"] for t in tools]
+        tool_calls = []
         
         # Check for JSON tool call format
         json_pattern = r'\{[^{}]*"name"\s*:\s*"(\w+)"[^{}]*"args"\s*:\s*(\{[^{}]*\})[^{}]*\}'
@@ -238,13 +241,13 @@ class LLMFactory:
                 name = json_match.group(1)
                 args = json.loads(json_match.group(2))
                 if name in tool_names:
-                    return {
+                    return [{
                         "id": f"call_{name}",
                         "function": {
                             "name": name,
                             "arguments": args,
                         }
-                    }
+                    }]
             except:
                 pass
         
@@ -255,16 +258,23 @@ class LLMFactory:
             if match:
                 args_str = match.group(1)
                 args = self._parse_args_string(args_str)
-                return {
+                return [{
                     "id": f"call_{tool_name}",
                     "function": {
                         "name": tool_name,
                         "arguments": args,
                     }
-                }
+                }]
         
-        # Check for intent keywords
+        # Check for intent keywords - support multiple intents
         intent_to_tool = {
+            "subscription": "create_subscription",
+            "subscribe": "create_subscription",
+            "recurring fee": "create_subscription",
+            "monthly fee": "create_subscription",
+            "bill": "create_bill",
+            "payment": "create_bill",
+            "due": "create_bill",
             "convert": "convert_currency",
             "exchange": "convert_currency",
             "currency": "convert_currency",
@@ -273,26 +283,82 @@ class LLMFactory:
             "expense": "create_expense",
             "spent": "create_expense",
             "bought": "create_expense",
-            "paid": "create_expense",
-            "subscription": "create_subscription",
-            "bill": "create_bill",
             "goal": "create_goal",
+            "save for": "create_goal",
             "spending": "get_spending_by_category",
             "chart": "generate_chart",
+            "balance": "get_balance",
+            "how much": "get_balance",
+            "income": "create_income",
+            "salary": "create_income",
+            "earned": "create_income",
         }
         
-        for keyword, tool_name in intent_to_tool.items():
-            if keyword in response_lower and tool_name in tool_names:
-                # Extract potential arguments from context
-                args = self._extract_args_from_context(response, tool_name)
-                if args:
-                    return {
-                        "id": f"call_{tool_name}",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": args,
-                        }
-                    }
+        # Track which tools we've added to avoid duplicates
+        added_tools = set()
+        
+        # For multi-intent messages (e.g., "subscription AND bill")
+        # Split by "and" to process each part separately
+        if " and " in response_lower:
+            parts = response.split(" and ")
+        else:
+            parts = [response]
+        
+        for part in parts:
+            part_lower = part.lower()
+            for keyword, tool_name in intent_to_tool.items():
+                if keyword in part_lower and tool_name in tool_names and tool_name not in added_tools:
+                    # Extract potential arguments from context
+                    args = self._extract_args_from_context(part, tool_name)
+                    if args:
+                        tool_calls.append({
+                            "id": f"call_{tool_name}_{len(tool_calls)}",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": args,
+                            }
+                        })
+                        added_tools.add(tool_name)
+                        break  # Move to next part after finding a match
+        
+        return tool_calls if tool_calls else None
+    
+    def _parse_relative_date(self, text: str) -> Optional[str]:
+        """Parse relative date expressions to YYYY-MM-DD format."""
+        from datetime import date, timedelta
+        import re
+        
+        today = date.today()
+        text_lower = text.lower()
+        
+        # "tomorrow"
+        if "tomorrow" in text_lower:
+            return (today + timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # "next week"
+        if "next week" in text_lower:
+            return (today + timedelta(weeks=1)).strftime('%Y-%m-%d')
+        
+        # "in X days" or "X days later" or "X days from now"
+        days_match = re.search(r'(\d+)\s*days?\s*(?:later|from now)?', text_lower)
+        if days_match:
+            days = int(days_match.group(1))
+            return (today + timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        # "in X weeks" or "X weeks later" or "X week later"
+        weeks_match = re.search(r'(\d+)\s*weeks?\s*(?:later|from now)?', text_lower)
+        if weeks_match:
+            weeks = int(weeks_match.group(1))
+            return (today + timedelta(weeks=weeks)).strftime('%Y-%m-%d')
+        
+        # "next month"
+        if "next month" in text_lower:
+            next_month = today.replace(day=1)
+            if today.month == 12:
+                next_month = next_month.replace(year=today.year + 1, month=1)
+            else:
+                next_month = next_month.replace(month=today.month + 1)
+            return next_month.strftime('%Y-%m-%d')
         
         return None
     
@@ -336,23 +402,198 @@ class LLMFactory:
                     return {"symbol": sym}
         
         elif tool_name == "create_expense":
-            # Look for amount and merchant
-            amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:usd|thb|eur|\$|฿)?', text_lower)
-            if amount_match:
-                amount = float(amount_match.group(1))
-                # Try to find merchant
+            # Improved expense parsing
+            amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:usd|dollars?|\$|฿|thb|eur|€)?', text_lower)
+            if not amount_match:
+                return None
+            
+            amount = float(amount_match.group(1))
+            
+            # Extract currency
+            currency = "USD"
+            currency_match = re.search(r'(?:usd|dollars?|\$|฿|thb|eur|€)', text_lower)
+            if currency_match:
+                curr_text = currency_match.group(0)
+                if curr_text in ['฿', 'thb']:
+                    currency = "THB"
+                elif curr_text in ['€', 'eur']:
+                    currency = "EUR"
+                else:
+                    currency = "USD"
+            
+            # Extract merchant name - look for common patterns
+            merchant = "Unknown"
+            
+            # Pattern 1: "spent $X at MERCHANT"
+            at_match = re.search(r'(?:spent|paid|bought).*?(?:at|from)\s+([A-Za-z][A-Za-z0-9\s&\'.-]+?)(?:\s+for|\s+on|\s+in|$)', text, re.IGNORECASE)
+            if at_match:
+                merchant = at_match.group(1).strip()
+            else:
+                # Pattern 2: "MERCHANT $X" or "$X MERCHANT"
+                # Look for capitalized words near the amount
                 words = text.split()
-                merchant = "Unknown"
-                for word in words:
-                    if word[0].isupper() and word.lower() not in ["i", "the", "a"]:
-                        merchant = word
+                amount_idx = -1
+                for i, word in enumerate(words):
+                    if re.search(r'\d+(?:\.\d+)?', word):
+                        amount_idx = i
                         break
-                return {
-                    "amount": amount,
-                    "merchant": merchant,
-                    "category": "general",
-                }
+                
+                if amount_idx >= 0:
+                    # Check words around the amount
+                    for offset in [-2, -1, 1, 2]:
+                        idx = amount_idx + offset
+                        if 0 <= idx < len(words):
+                            word = words[idx]
+                            # Skip common words
+                            if word.lower() not in ['spent', 'paid', 'bought', 'at', 'for', 'on', 'the', 'a', 'an', 'in', 'to', 'from', '$', '฿', '€']:
+                                # Clean the word
+                                clean_word = re.sub(r'[^\w\s&\'-]', '', word)
+                                if clean_word and len(clean_word) > 1:
+                                    merchant = clean_word.title()
+                                    break
+            
+            # Extract category - look for common expense categories
+            category = "other"
+            category_keywords = {
+                "food": ["food", "restaurant", "lunch", "dinner", "breakfast", "meal", "eat", "cafe", "coffee"],
+                "transport": ["uber", "taxi", "bus", "train", "gas", "fuel", "parking", "transport"],
+                "shopping": ["shopping", "store", "mall", "amazon", "bought", "purchase"],
+                "entertainment": ["movie", "cinema", "game", "concert", "show", "entertainment"],
+                "bills": ["bill", "utility", "electric", "water", "internet", "phone"],
+                "groceries": ["grocery", "groceries", "supermarket", "market"],
+                "health": ["doctor", "hospital", "pharmacy", "medicine", "health"],
+            }
+            
+            for cat, keywords in category_keywords.items():
+                if any(kw in text_lower for kw in keywords):
+                    category = cat
+                    break
+            
+            # Return parsed expense data
+            return {
+                "amount": amount,
+                "merchant": merchant,
+                "category": category,
+                "currency": currency,
+            }
         
+        elif tool_name == "create_subscription":
+            # Pattern: "$50 gym subscription" or "gym subscription for $50"
+            from datetime import date
+            
+            amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:\$|usd|dollars?)?', text_lower)
+            if not amount_match:
+                # Try with $ before the number
+                amount_match = re.search(r'\$\s*(\d+(?:\.\d+)?)', text_lower)
+            if not amount_match:
+                return None
+            
+            amount = float(amount_match.group(1))
+            
+            # Extract name - look for subscription keywords
+            name = "Subscription"
+            name_patterns = [
+                r'(\w+)\s+subscription',  # "gym subscription"
+                r'subscribe\s+(?:to\s+)?(\w+)',  # "subscribe to netflix"
+                r'(\w+)\s+for\s+\$?\d+',  # "netflix for $15"
+            ]
+            for pattern in name_patterns:
+                match = re.search(pattern, text_lower)
+                if match:
+                    name = match.group(1).title()
+                    break
+            
+            # Detect billing cycle
+            billing_cycle = "monthly"  # default
+            if any(w in text_lower for w in ["weekly", "every week", "per week"]):
+                billing_cycle = "weekly"
+            elif any(w in text_lower for w in ["yearly", "annual", "per year"]):
+                billing_cycle = "yearly"
+            elif any(w in text_lower for w in ["daily", "every day", "per day"]):
+                billing_cycle = "daily"
+            
+            # Get next billing date
+            next_billing_date = self._parse_relative_date(text) or date.today().strftime('%Y-%m-%d')
+            
+            return {
+                "name": name,
+                "amount": amount,
+                "billing_cycle": billing_cycle,
+                "next_billing_date": next_billing_date,
+            }
+        
+        elif tool_name == "create_bill":
+            # Pattern: "$40 bill to pay in 1 week" or "electric bill $100"
+            from datetime import date
+            
+            amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:\$|usd|dollars?)?', text_lower)
+            if not amount_match:
+                # Try with $ before the number
+                amount_match = re.search(r'\$\s*(\d+(?:\.\d+)?)', text_lower)
+            if not amount_match:
+                return None
+            
+            amount = float(amount_match.group(1))
+            
+            # Extract name
+            name = "Bill"
+            bill_patterns = [
+                r'(\w+)\s+bill',  # "electric bill"
+                r'bill\s+(?:for\s+)?(\w+)',  # "bill for rent"
+            ]
+            for pattern in bill_patterns:
+                match = re.search(pattern, text_lower)
+                if match:
+                    extracted = match.group(1)
+                    # Skip common non-name words
+                    if extracted not in ['a', 'the', '40', '50', 'my', 'to', 'be', 'and']:
+                        name = extracted.title()
+                        break
+            
+            # Get due date
+            due_date = self._parse_relative_date(text) or date.today().strftime('%Y-%m-%d')
+            
+            # Check if recurring
+            is_recurring = any(w in text_lower for w in ["recurring", "monthly", "every month", "each month"])
+            
+            return {
+                "name": name,
+                "amount": amount,
+                "due_date": due_date,
+                "is_recurring": is_recurring,
+            }
+        
+        elif tool_name == "create_income":
+            # Pattern: "add $5000 salary" or "received $1000 from freelance"
+            amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:\$|usd|dollars?)?', text_lower)
+            if not amount_match:
+                amount_match = re.search(r'\$\s*(\d+(?:\.\d+)?)', text_lower)
+            if not amount_match:
+                return None
+            
+            amount = float(amount_match.group(1))
+            
+            # Extract source
+            source = "Income"
+            source_keywords = {
+                "salary": ["salary", "paycheck", "wages"],
+                "freelance": ["freelance", "contract", "gig"],
+                "investment": ["investment", "dividend", "interest"],
+                "bonus": ["bonus"],
+                "rental": ["rent", "rental"],
+            }
+            
+            for src, keywords in source_keywords.items():
+                if any(kw in text_lower for kw in keywords):
+                    source = src.title()
+                    break
+            
+            return {
+                "amount": amount,
+                "source": source,
+            }
+        
+        # No args extracted for this tool
         return None
     
     def _parse_intent_fallback(
@@ -363,12 +604,12 @@ class LLMFactory:
         """Fallback intent parsing when no LLM is available."""
         last_message = messages[-1].get("content", "") if messages else ""
         
-        # Parse tool call from user message
-        tool_call = self._parse_tool_call_from_response(last_message, tools)
-        if tool_call:
+        # Parse tool calls from user message
+        tool_calls = self._parse_tool_call_from_response(last_message, tools)
+        if tool_calls:
             return {
                 "content": "",
-                "tool_calls": [tool_call],
+                "tool_calls": tool_calls,
             }
         
         return {

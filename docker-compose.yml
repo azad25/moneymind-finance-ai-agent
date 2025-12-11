@@ -211,6 +211,7 @@ services:
     ports:
       - "8010:8000"
     volumes:
+      - ./backend:/app  # Mount source code for live reload
       - backend_uploads:/app/uploads
       - backend_logs:/app/logs
     depends_on:

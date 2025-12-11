@@ -71,7 +71,9 @@ export const API_ENDPOINTS = {
     documents: {
         upload: `${API_BASE_URL}/api/documents/upload`,
         list: `${API_BASE_URL}/api/documents`,
-        query: `${API_BASE_URL}/api/documents/query`,
+        get: (id: string) => `${API_BASE_URL}/api/documents/${id}`,
+        delete: (id: string) => `${API_BASE_URL}/api/documents/${id}`,
+        query: `${API_BASE_URL}/api/documents/query-all`,
     },
 
     // Gmail

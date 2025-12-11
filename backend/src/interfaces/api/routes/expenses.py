@@ -5,9 +5,12 @@ CRUD operations for expenses, subscriptions, bills, goals, income
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+
+# Import authentication dependency
+from .auth import get_current_user
 
 router = APIRouter()
 
@@ -157,6 +160,7 @@ async def create_expense(expense: ExpenseCreate):
 
 @router.get("")
 async def list_expenses(
+    current_user: dict = Depends(get_current_user),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     category: Optional[str] = None,
@@ -164,64 +168,83 @@ async def list_expenses(
     limit: int = Query(50, ge=1, le=100)
 ):
     """List expenses with optional filters."""
-    # TODO: Query PostgreSQL - for now return empty array
-    return []
+    from src.infrastructure.database.postgres import async_session_factory
+    from src.domain.models import Expense
+    
+    async with async_session_factory() as session:
+        user_id = current_user["id"]
+        query = select(Expense).where(Expense.user_id == user_id)
+        
+        if start_date:
+            query = query.where(Expense.expense_date >= start_date)
+        if end_date:
+            query = query.where(Expense.expense_date <= end_date)
+        if category:
+            query = query.where(Expense.category == category)
+        
+        query = query.offset(skip).limit(limit).order_by(Expense.expense_date.desc())
+        
+        result = await session.execute(query)
+        expenses = result.scalars().all()
+        
+        return [
+            {
+                "id": exp.id,
+                "amount": float(exp.amount),
+                "currency": exp.currency,
+                "merchant": exp.merchant,
+                "category": exp.category,
+                "description": exp.description,
+                "expense_date": exp.expense_date.isoformat(),
+                "created_at": exp.created_at.isoformat() if exp.created_at else None
+            }
+            for exp in expenses
+        ]
 
 
 @router.get("/balance")
-async def get_balance():
-    """Get current account balance."""
-    from sqlalchemy import func
-    from src.infrastructure.database.postgres import async_session_factory
-    from src.domain.models import Account, Income, Expense
-    import uuid
+async def get_balance(current_user: dict = Depends(get_current_user)):
+    """Get current account balance using centralized BalanceService."""
+    from src.application.services.balance_service import BalanceService
     
-    async with async_session_factory() as session:
-        try:
-            # Calculate total income
-            income_result = await session.execute(
-                select(func.sum(Income.amount))
-            )
-            total_income = income_result.scalar() or Decimal("0")
-            
-            # Calculate total expenses
-            expense_result = await session.execute(
-                select(func.sum(Expense.amount))
-            )
-            total_expenses = expense_result.scalar() or Decimal("0")
-            
-            # Calculate balance
-            calculated_balance = total_income - total_expenses
-            
-            return {
-                "balance": float(calculated_balance),
-                "currency": "USD",
-                "last_updated": datetime.utcnow(),
-                "total_income": float(total_income),
-                "total_expenses": float(total_expenses)
-            }
-        except Exception as e:
-            # Return mock data if calculation fails
-            return {
-                "balance": 0,
-                "currency": "USD",
-                "last_updated": datetime.utcnow(),
-                "error": str(e)
-            }
+    try:
+        user_id = current_user["id"]
+        
+        # Use centralized balance service (with caching)
+        result = await BalanceService.get_balance(user_id)
+        
+        # Return in API format
+        return {
+            "balance": result["balance"],
+            "currency": result["currency"],
+            "last_updated": result["calculated_at"],
+            "total_income": result["total_income"],
+            "total_expenses": result["total_expenses"],
+            "cached": result.get("cached", False)
+        }
+    except Exception as e:
+        # Return error response
+        return {
+            "balance": 0,
+            "currency": "USD",
+            "last_updated": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
 
 
 # ============== Income Endpoints (MUST BE BEFORE /{expense_id}) ==============
 @router.post("/income", response_model=IncomeResponse)
-async def create_income(income: IncomeCreate):
+async def create_income(
+    income: IncomeCreate,
+    current_user: dict = Depends(get_current_user)
+):
     """Create a new income record."""
     from src.infrastructure.database.postgres import async_session_factory
     from src.domain.models import Income
     import uuid
     
     async with async_session_factory() as session:
-        # TODO: Get current_user from authentication
-        # For now, use a default user_id
-        user_id = "default_user"
+        user_id = current_user["id"]
         
         income_record = Income(
             id=str(uuid.uuid4()),
@@ -253,6 +276,7 @@ async def create_income(income: IncomeCreate):
 
 @router.get("/income")
 async def list_income(
+    current_user: dict = Depends(get_current_user),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     skip: int = Query(0, ge=0),
@@ -263,8 +287,8 @@ async def list_income(
     from src.domain.models import Income
     
     async with async_session_factory() as session:
-        # TODO: Filter by current_user
-        query = select(Income)
+        user_id = current_user["id"]
+        query = select(Income).where(Income.user_id == user_id)
         
         if start_date:
             query = query.where(Income.income_date >= start_date)
@@ -309,7 +333,7 @@ async def create_subscription(subscription: SubscriptionCreate):
 
 
 @router.get("/subscriptions")
-async def list_subscriptions():
+async def list_subscriptions(current_user: dict = Depends(get_current_user)):
     """List all subscriptions."""
     # TODO: Query PostgreSQL - for now return empty array
     return []
@@ -333,6 +357,7 @@ async def create_bill(bill: BillCreate):
 
 @router.get("/bills")
 async def list_bills(
+    current_user: dict = Depends(get_current_user),
     include_paid: bool = False,
     upcoming_days: Optional[int] = Query(None, ge=1)
 ):
@@ -365,7 +390,7 @@ async def create_goal(goal: GoalCreate):
 
 
 @router.get("/goals")
-async def list_goals():
+async def list_goals(current_user: dict = Depends(get_current_user)):
     """List all financial goals."""
     # TODO: Query PostgreSQL - for now return empty array
     return []

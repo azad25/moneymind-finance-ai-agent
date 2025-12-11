@@ -111,8 +111,19 @@ async def websocket_chat(
     # Generate session ID
     session_id = str(uuid.uuid4())
     
-    # TODO: Validate JWT token and get user_id
-    user_id = "default_user"  # Replace with actual user from token
+    # Get user_id from token
+    user_id = "default_user"  # Default fallback
+    if token:
+        try:
+            from src.application.services.auth_service import AuthService
+            payload = AuthService.decode_token(token)
+            user_id = payload.get("sub", "default_user")
+        except Exception as e:
+            logger.warning(f"Failed to decode token: {e}")
+    
+    # Set user context for tools
+    from src.langchain.context import set_user_context
+    set_user_context(user_id)
     
     try:
         # Accept connection

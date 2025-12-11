@@ -1,199 +1,429 @@
 """
-Gmail Integration Routes
-Fetch and process emails via Gmail API
+Gmail API Routes
+Full CRUD operations for Gmail integration
 """
 from typing import Optional, List
-from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends, Query
+from pydantic import BaseModel, EmailStr
+
+from src.application.services.gmail_service import GmailService
+from src.interfaces.api.dependencies import get_current_user
 
 router = APIRouter()
 
 
-class EmailSummary(BaseModel):
-    """Email summary model."""
+class EmailSearchRequest(BaseModel):
+    """Email search request."""
+    query: str
+    max_results: int = 10
+
+
+class SendEmailRequest(BaseModel):
+    """Send email request."""
+    to: EmailStr
+    subject: str
+    body: str
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    html: bool = False
+
+
+class ReplyEmailRequest(BaseModel):
+    """Reply to email request."""
+    body: str
+    html: bool = False
+
+
+class EmailResponse(BaseModel):
+    """Email response model."""
     id: str
-    thread_id: str
     subject: str
     sender: str
+    date: str
     snippet: str
-    date: datetime
-    has_attachments: bool
-    labels: List[str]
-
-
-class EmailListResponse(BaseModel):
-    """Email list response."""
-    emails: List[EmailSummary]
-    total: int
-    next_page_token: Optional[str]
 
 
 class EmailDetailResponse(BaseModel):
-    """Full email detail response."""
+    """Detailed email response."""
+    id: str
+    subject: str
+    sender: str
+    date: str
+    body: str
+
+
+class SendEmailResponse(BaseModel):
+    """Send email response."""
     id: str
     thread_id: str
+    to: str
     subject: str
-    sender: str
-    recipients: List[str]
-    body_text: Optional[str]
-    body_html: Optional[str]
-    date: datetime
-    attachments: List[dict]
+    status: str
 
 
-class BankingEmailResponse(BaseModel):
-    """Banking email with extracted transaction data."""
-    id: str
-    subject: str
-    sender: str
-    date: datetime
-    transaction_type: Optional[str]  # credit, debit, transfer
-    amount: Optional[float]
-    currency: Optional[str]
-    merchant: Optional[str]
-    raw_content: str
+@router.get("/status")
+async def get_gmail_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Check if Gmail is connected for the user."""
+    service = GmailService(user_id=current_user["id"])
+    is_connected = await service.is_connected()
+    
+    return {
+        "connected": is_connected,
+        "user_id": current_user["id"],
+    }
 
 
-class GmailAuthStatus(BaseModel):
-    """Gmail authentication status."""
-    connected: bool
-    email: Optional[str]
-    scopes: List[str]
-    last_sync: Optional[datetime]
-
-
-@router.get("/auth-status", response_model=GmailAuthStatus)
-async def get_gmail_auth_status():
-    """
-    Check if user has connected Gmail.
-    """
-    # TODO: Check if user has Gmail refresh token
-    return GmailAuthStatus(
-        connected=False,
-        email=None,
-        scopes=[],
-        last_sync=None
-    )
-
-
-@router.get("/emails", response_model=EmailListResponse)
-async def list_emails(
-    query: Optional[str] = Query(None, description="Gmail search query"),
-    max_results: int = Query(20, ge=1, le=100),
-    page_token: Optional[str] = None
+@router.post("/search")
+async def search_emails(
+    request: EmailSearchRequest,
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    List recent emails with optional search query.
+    Search Gmail inbox.
     
     Query examples:
-    - "from:bank" - Emails from banks
-    - "subject:transaction" - Transaction notifications
-    - "is:unread" - Unread emails
-    - "after:2024/01/01" - Emails after date
+    - "from:bank@example.com"
+    - "subject:invoice"
+    - "after:2024/01/01"
+    - "is:unread"
     """
-    # TODO: Check Gmail connection
-    # TODO: Fetch emails via Gmail API
-    return EmailListResponse(
-        emails=[],
-        total=0,
-        next_page_token=None
-    )
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not connected. Please connect your Gmail account."
+        )
+    
+    try:
+        emails = await service.search_emails(
+            query=request.query,
+            max_results=request.max_results,
+        )
+        
+        return {
+            "emails": [
+                EmailResponse(
+                    id=email["id"],
+                    subject=email.get("subject", "No subject"),
+                    sender=email.get("from", "Unknown"),
+                    date=email.get("date", ""),
+                    snippet=email.get("snippet", ""),
+                )
+                for email in emails
+            ],
+            "total": len(emails),
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/emails/{email_id}", response_model=EmailDetailResponse)
-async def get_email(email_id: str):
-    """
-    Get full email details including body.
-    """
-    # TODO: Fetch email from Gmail API
-    raise HTTPException(status_code=404, detail="Email not found")
+@router.get("/recent")
+async def get_recent_emails(
+    max_results: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get most recent emails."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        emails = await service.get_recent_emails(max_results=max_results)
+        
+        return {
+            "emails": [
+                EmailResponse(
+                    id=email["id"],
+                    subject=email.get("subject", "No subject"),
+                    sender=email.get("from", "Unknown"),
+                    date=email.get("date", ""),
+                    snippet=email.get("snippet", ""),
+                )
+                for email in emails
+            ],
+            "total": len(emails),
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/banking", response_model=List[BankingEmailResponse])
+@router.get("/unread")
+async def get_unread_emails(
+    max_results: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get unread emails."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        emails = await service.get_unread_emails(max_results=max_results)
+        
+        return {
+            "emails": [
+                EmailResponse(
+                    id=email["id"],
+                    subject=email.get("subject", "No subject"),
+                    sender=email.get("from", "Unknown"),
+                    date=email.get("date", ""),
+                    snippet=email.get("snippet", ""),
+                )
+                for email in emails
+            ],
+            "total": len(emails),
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{message_id}")
+async def get_email(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get full email details."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        email = await service.get_email_by_id(message_id)
+        
+        if not email:
+            raise HTTPException(status_code=404, detail="Email not found")
+        
+        return EmailDetailResponse(
+            id=email["id"],
+            subject=email.get("subject", "No subject"),
+            sender=email.get("from", "Unknown"),
+            date=email.get("date", ""),
+            body=email.get("body", ""),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/send")
+async def send_email(
+    request: SendEmailRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send an email via Gmail."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        result = await service.send_email(
+            to=request.to,
+            subject=request.subject,
+            body=request.body,
+            cc=request.cc,
+            bcc=request.bcc,
+            html=request.html,
+        )
+        
+        return SendEmailResponse(**result)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{message_id}/reply")
+async def reply_to_email(
+    message_id: str,
+    request: ReplyEmailRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reply to an email."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        result = await service.reply_to_email(
+            message_id=message_id,
+            body=request.body,
+            html=request.html,
+        )
+        
+        return {
+            "id": result["id"],
+            "thread_id": result["thread_id"],
+            "in_reply_to": message_id,
+            "status": "sent",
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{message_id}/read")
+async def mark_as_read(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark email as read."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.mark_as_read(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to mark as read")
+    
+    return {"message": "Email marked as read"}
+
+
+@router.post("/{message_id}/unread")
+async def mark_as_unread(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark email as unread."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.mark_as_unread(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to mark as unread")
+    
+    return {"message": "Email marked as unread"}
+
+
+@router.post("/{message_id}/archive")
+async def archive_email(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Archive email (remove from inbox)."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.archive_email(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to archive email")
+    
+    return {"message": "Email archived"}
+
+
+@router.delete("/{message_id}")
+async def delete_email(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete email (move to trash)."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.delete_email(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete email")
+    
+    return {"message": "Email moved to trash"}
+
+
+@router.post("/{message_id}/star")
+async def star_email(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Star an email."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.star_email(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to star email")
+    
+    return {"message": "Email starred"}
+
+
+@router.delete("/{message_id}/star")
+async def unstar_email(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove star from email."""
+    service = GmailService(user_id=current_user["id"])
+    
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    success = await service.unstar_email(message_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to unstar email")
+    
+    return {"message": "Star removed"}
+
+
+@router.get("/banking/emails")
 async def get_banking_emails(
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    sources: Optional[str] = Query(None, description="Comma-separated bank domains")
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(get_current_user),
 ):
-    """
-    Get banking-related emails with extracted transaction data.
+    """Get banking and financial emails."""
+    service = GmailService(user_id=current_user["id"])
     
-    Automatically searches for emails from:
-    - Major banks (chase, bofa, wells fargo, etc.)
-    - Payment services (paypal, venmo, zelle)
-    - Credit cards
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
     
-    Extracts:
-    - Transaction amounts
-    - Merchant names
-    - Transaction types
-    """
-    # TODO: Search Gmail for banking emails
-    # TODO: Parse and extract transaction data
-    return []
+    try:
+        emails = await service.get_banking_emails(days=days)
+        
+        return {
+            "emails": emails,
+            "total": len(emails),
+            "period_days": days,
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/sync")
-async def trigger_email_sync():
-    """
-    Trigger background sync of user's emails.
-    
-    This is a background task that:
-    1. Fetches new emails since last sync
-    2. Processes banking emails
-    3. Extracts transactions
-    4. Updates user's expense records
-    """
-    # TODO: Trigger Celery background task
-    return {
-        "message": "Email sync started",
-        "task_id": "task_123"
-    }
-
-
-@router.get("/sync-status")
-async def get_sync_status(task_id: str):
-    """
-    Check status of email sync task.
-    """
-    # TODO: Check Celery task status
-    return {
-        "task_id": task_id,
-        "status": "pending",  # pending, running, completed, failed
-        "progress": 0,
-        "message": "Waiting to start"
-    }
-
-
-@router.post("/summarize")
-async def summarize_emails(
-    email_ids: List[str] = Query(..., description="Email IDs to summarize")
+@router.get("/banking/insights")
+async def get_banking_insights(
+    current_user: dict = Depends(get_current_user),
 ):
-    """
-    Summarize selected emails using LLM.
-    """
-    # TODO: Fetch emails
-    # TODO: Use LLM to summarize
-    return {
-        "summary": "This is a mock summary of the selected emails.",
-        "email_count": len(email_ids)
-    }
-
-
-@router.get("/insights")
-async def get_email_insights():
-    """
-    Get insights from analyzed banking emails.
+    """Get transaction insights from banking emails."""
+    service = GmailService(user_id=current_user["id"])
     
-    Returns:
-    - Total transactions this month
-    - Top merchants
-    - Spending by category (from email data)
-    """
-    # TODO: Aggregate transaction data from emails
-    return {
-        "total_transactions": 0,
-        "total_amount": 0.0,
-        "top_merchants": [],
-        "by_category": {}
-    }
+    if not await service.is_connected():
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    
+    try:
+        insights = await service.get_transaction_insights()
+        return insights
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
